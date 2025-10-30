@@ -337,3 +337,225 @@ Ensuite on associe les droits lectures / écritures :
 chmod -R 2750 /opt/guacamole/recordings
 ```
 
+Après cela, les enregistrements vidéos devraient être créés et lisibles.
+
+## 5. Changement de la page de login pour une meilleure vue
+
+### 1. Objectifs
+* Mettre le titre : "`Bienvenue sur l'accès prestataire`"
+* Changer le numéro de version par le nom : "`Groupe CGO`"
+* Implémenter le logo CGO
+* Mettre le fond de page fourni
+
+### 2. Trouver le dossier avec les éléments de base
+
+Pour ce serveur, étant donné qu'il est mis en place avec Docker, les éléments pour modifier les pages de Guacamole se retrouvent dans un conteneur, ce qui fait que si on modifie dans le conteneur directement, les cahngements ne seront pas persistants.
+
+Pour palier à ça, nous devons récupérer l'archive `guacamole.war` sur l'hôte, qui est située dans le dossier `guacamole:/opt/guacamole/webapp/`
+
+```bash
+docker cp guacamole:/opt/guacamole/webapp/guacamole.war /opt/guacamole
+```
+
+Après avoir récupéré l'archive, nous devons la décompresser, pour cela j'utiliserai unzip.
+
+```bash
+apt install -y unzip zip #installation de zip pour la suite
+```
+
+Pour ne pas se perdre dans mes fichiers, je ferai l'extraction dans un dossier `guac_extract`
+
+```bash
+mkdir guac_extract
+unzip guacamole.war ./guac_extract
+cd guac_extract
+```
+
+### 3. Modifier le texte de la page de login
+
+Suite à l'extraction, on se retrouve avec plusieurs fichiers/dossiers, celui qui nous permettra de modifier notre page login sera `templates.js`, ce script en JS créé les pages grâce aux templates fournis dans le dossier, par exemple pour la page de login, le template se trouve en `./app/login/templates/login.html`
+
+Pour changer le texte de cette page nous devrons donc ouvrir `templates.js` avec un éditeur de texte tel que nano ou encore vim.
+
+```bash
+nano ./templates.js
+```
+
+Ensuite, on cherchera une ligne bien spécifique dans ce fichier : 
+
+```JS
+$templateCache.put('app/login/templates/login.html'...
+```
+
+Dans cette ligne se trouve toute la page html, où on peut y modifier directement les informations nécessaires.
+
+Pour modifier le titre dans notre exemple, on modifiera cette partie 
+```html
+<div class="app-name"> {{\'APP.NAME\' | translate}} </div>
+``` 
+
+en
+
+```html
+<div class="app-name"> Bienvenue sur l'accès prestataire </div>
+``` 
+
+Et pour le numéro de version, on modifiera 
+
+```html
+<div class="version-number">{{\'APP.VERSION\' | translate}}</div>
+```
+en 
+
+```html
+<div class="version-number"> Groupe CGO </div>
+```
+### 4. Modifier le logo et le fond de la page de login
+
+Tout d'abord, importer le logo et le fond de page dans le dossier `images/` du dossier compressé.
+
+#### 1. Modifier le logo
+
+Pour pouvoir modifier le logo ainsi que le fond de page, on doit modifier le fichier `.css` qui se trouve aussi dans le dossier décompressé, il est nommé sous la forme "`1.guacamole.{hash}.css`".
+
+```bash
+nano ./1.guacamole.{hash}.css
+```
+
+Une fois sur l'éditeur de texte, chercher '`guac_tricolor.svg`' qui est le nom du logo de base sur Guacamole, donc soit renommer son propre logo à ce nom la, soit remplacer l'ancienne valeur par le nouveau nom de son logo, ensuite tester si le logo se met bien sur la page, sinon adapter le CSS de cette même variable.
+
+#### 2. Modifier le fond de page
+
+Pour modifier le fond de page c'est légèrement plus compliqué, toujours dans le fichier `.css`, il faut cette fois rajouter une nouvelle variable pour pouvoir y introduire le fond étant donné qu'à la base il n'y en a pas.
+
+Cette variable peut être ajoutée un peu où on veut dans le fichier, je l'ai mis en 3ème variable de mon côté.
+
+```css
+.login-ui{
+      background:#000 url("images/{fond de page}") no-repeat center center fixed !important;background-size:cover !important
+      }
+```
+
+Les paramètres peuvent être adaptés comme on le souhaite.
+
+### 5. Compression du dossier modifié + mappage du dossier
+
+#### 1. Compression du dossier modifié
+
+Après les modifications effectuées, il faudra refaire le dossier compressé  `guacamole`.war pour ensuite le remettre dans le conteneur, on le remettra dans le dossier `/opt/guacamole` en remplacement de l'ancien.
+
+```bash
+zip -r ../guacamole.war * #compressé tous les éléments du dossier modifié dans le nouveau dossier guacamole.war
+```
+
+#### 2. Mappage du dossier compressé
+
+Pour rendre les nouveaux paramètres persistant, on va mettre en place un mappage du dossier compressé de l'hôte sur celui du conteneur, le mappage fera en sorte que le dossier de l'hôte remplace celui du conteneur.
+
+La mise en place du mappage se fait via le fichier `docker-compose.yml` : 
+(fichier hôte:fichier conteneur)
+```YML
+  guacamole:
+    container_name: guacamole
+    image: guacamole/guacamole:latest
+    restart: always
+    expose:
+      - "8080"
+    environment:
+      GUACD_HOSTNAME: "guacd"
+      MYSQL_HOSTNAME: "guacdb"
+      MYSQL_DATABASE: "guacamole_db"
+      MYSQL_USERNAME: "mysql"
+      MYSQL_PASSWORD: "mdpmysql"
+      TOTP_ENABLED: "true"
+      RECORDING_ENABLED: "true"
+    volumes:
+      - /opt/guacamole/guacamole.war:/opt/guacamole/webapp/guacamole.war #ajouter cette ligne
+      - /opt/guacamole/recordings:/var/lib/guacamole/recordings:ro
+```
+
+Redémarrer les conteneurs et tester si le mappage fonctionne bien.
+
+```bash
+docker compose && docker compose up -d
+```
+
+## 6. Export / Import des connexions 
+
+Lors d'une montée de version ou alors une refonte totale du système Bastion, l'export et l'import des connexions ainsi que leurs paramètres peuvent être nécessaires, pour cela, deux scripts `bash` pour les deux actions, qui vont donc chercher les informations dans la base de données SQL, et les écrire dans un fichier en `.sql`, à l'inverse, le script prend les informations du `.sql` et va les écrire dans la nouvelle base de données.
+
+### 1. Script d'export base de données
+
+script `export_bdd.sql` : 
+
+```bash
+#!/bin/bash
+#Configuration
+CONTAINER_DB="guacamoledb"
+DB_NAME="guacamole_db"
+DB_USER="mysql"
+DB_PASS="mdpmysql"
+DATE=$(date +"%Y-%m-%d_%H-%M")
+EXPORT_FILE="/opt/guacamole/backups/guac_export_${DATE}.sql"
+
+echo "📦 Export des connexions Guacamole..."
+echo "🕒 Date : $DATE"
+echo "📁 Destination : $EXPORT_FILE"
+
+#Commande d’export
+docker exec -i "$CONTAINER_DB" \
+mysqldump --no-tablespaces -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+guacamole_connection \
+guacamole_connection_parameter \
+guacamole_connection_permission \
+guacamole_sharing_profile \
+guacamole_sharing_profile_parameter \
+> "$EXPORT_FILE"
+
+#Vérifie le succès de l’export
+if [ $? -eq 0 ]; then
+  echo "✅ Export SQL terminé avec succès."
+else
+  echo "❌ Erreur lors de l’export SQL."
+  exit 1
+fi
+```
+
+Ce script va créer un fichier `.sql` avec les informations dans le dossier `export_bdd/` sous un nom constitué de la date + heures/minutes.
+
+### 2. Script d'import base de données
+
+script `import_bdd.sql` :
+
+```bash
+#!/bin/bash
+#Configuration
+CONTAINER_DB="guacamoledb"
+DB_NAME="guacamole_db"
+DB_USER="mysql"
+DB_PASS="mdpmysql"
+IMPORT_DIR="/opt/guacamole/export_bdd"
+LATEST_EXPORT=$(ls -t ${IMPORT_DIR}/guac_export_*.sql* 2>/dev/null | head -n 1)
+
+#Vérifications
+if [ -z "$LATEST_EXPORT" ]; then
+  echo "❌ Aucun fichier de sauvegarde trouvé dans $IMPORT_DIR"
+  exit 1
+fi
+
+echo "📥 Import des connexions Guacamole..."
+echo "📁 Fichier détecté : $LATEST_BACKUP"
+
+#Import dans la base
+echo "⚙️  Import du fichier SQL dans la base..."
+docker exec -i "$CONTAINER_DB" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$LATEST_EXPORT"
+
+if [ $? -eq 0 ]; then
+  echo "✅ Import terminé avec succès."
+else
+  echo "❌ Erreur lors de l’import."
+  exit 1
+fi
+
+echo "✅ Base Guacamole mise à jour avec succès."
+```
