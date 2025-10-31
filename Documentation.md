@@ -29,7 +29,7 @@ Contexte : Mettre en place un serveur Bastion pour sécuriser les accès RDP/SSH
 - Joindre le poste au domaine (Domaine AD).
 - Définir les utilisateurs :
 - `root`
-- `infra`
+- `test`
 - etc.
 
 ### 1.4 Gestion du disque
