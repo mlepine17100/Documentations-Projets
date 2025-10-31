@@ -16,7 +16,7 @@ Contexte : Mettre en place un serveur Bastion pour sécuriser les accès RDP/SSH
 
 ### 1.1 Installation ISO
 - Vérifier l’intégrité de l’image ISO avant installation.  
-- Lancer l’installation standard. (ISO Debian13.1 hoisi)
+- Lancer l’installation standard. (ISO Debian13.1 choisi)
 
 ### 1.2 Paramétrages réseau
  
@@ -55,6 +55,10 @@ Mettre à jour les fichiers de configuration :
 ```bash
 /etc/fstab
 /boot/grub/grub.cfg
+/etc/initramfs-tools/conf.d/*
+sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/fstab
+sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/initramfs-tools/conf.d/*
+sed -i 's/{ancien_nom}/{nouveau_nom}/g' /boot/grub/grub.cfg
 ```
 
 ### 1.7 Configuration des agents et du pare-feu
@@ -201,6 +205,7 @@ docker compose up -d
 
 Et tester la page `http://ip_locale:8080/guacamole`.
 
+Pour la partie MFA `TOTP_ENABLED:'true'`, s'effectue lors de la première connexion, après avoir cliqué sur 'Se Connecter' le serveur affichera une page avec le QrCode pour activer le MFA via Authenticator. Le Scanner puis rentrer le code -> le MFA est activé. Permet de retirer les filtrages IP sur le FortiWeb.
 ## 3. Mise en place HTTPS + redirection HTTP -> HTTPS
 (certificat déjà généré)
 
@@ -567,7 +572,38 @@ fi
 echo "✅ Base Guacamole mise à jour avec succès."
 ```
 
-## 7. Problème rencontré
+## 7. Mise en place de la purge mensuelle du dossier recording pour éviter la saturation
+
+### 1. Mise en place du script de purge du dossier /opt/guacamole/recordings/
+
+script `/usr/local/sbin/purge_guac_record.sh` : 
+
+```bash
+#!/bin/bash
+# Script de purge des anciens enregistrements Guacamole
+
+# Dossier à nettoyer
+DIR="/opt/guacamole/recordings"
+
+# Supprime les fichiers de plus de 30 jours
+find "$DIR" -type f -mtime +30 -exec rm -f {} \;
+
+# Supprime les dossiers vides restants
+find "$DIR" -type d -empty -delete
+
+exit 0
+```
+### 2. modifier le crontab pour lancer le script tous les mois
+
+Se rendre sur le contrab avec la commande `crontab -e`, et ajouter la ligne suivant : 
+
+```bash
+@monthly /usr/local/sbin/purge-guac-recordings.sh >/var/log/purge-guac.log 2>&1
+```
+
+Cette ligne lancera le script tous les mois et mettra le résultat de la commande dans un fichier log.
+
+## 8. Ordonnancement au redémarrage
 
 Lors de l'installation, j'ai pu remarquer que lors du lancement des conteneurs au démarrage du poste, la page web ne chargait pas par moment, et en fait je me suis rendu compte que c'était parce que lors du lancement des conteneurs, le conteneur de la base de données était pas complétement initialisé, sauf que vu que le conteneur contenant la page web en a besoin, il plantait et n'essayait pas de recontacter la BDD.
 
