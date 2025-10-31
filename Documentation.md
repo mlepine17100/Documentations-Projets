@@ -20,10 +20,10 @@ Contexte : Mettre en place un serveur Bastion pour sécuriser les accès RDP/SSH
 
 ### 1.2 Paramétrages réseau
  
-- IP : 10.100.30.6/23
-- Gateway : 10.100.31.254
-- Serveur DNS :  Windows Server rôle DNS
-- Nom FQDN : SVDL01-RDG-01.cgo.local
+- IP : {IP}/{CIDR}
+- Gateway : {Adresse_IP_Gateway}
+- Serveur DNS :  {Windows_Server_rôle_DNS}
+- Nom FQDN : {nom_DNS_du_server}.{nom_de_domaine}
 
 ### 1.3 Configuration machine
 - Joindre le poste au domaine (Domaine AD).
@@ -70,8 +70,7 @@ Mettre à jour les fichiers de configuration :
 ### 2.1 Prérequis
 - Serveur sous Linux (Debian13 en l'occurrence)
 - Accès administrateur (root ou via sudo)
-- Serveur de base de données (MySQL/MariaDB ou PostgreSQL)
-- Tomcat et Guacamole Server installés
+- Répertoire installation des conteneurs
 
 ---
 
