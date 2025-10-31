@@ -1,7 +1,15 @@
 # Documentation Apache Guacamole
 
-[[_TOC_]]
+## Tables des matières
+  - [1. Préparation et installation](#1-préparation-et-installation)
+  - [2. Installation et configuration d’Apache Guacamole](#2-installation-et-configuration-dapache-guacamole)
+  - [3. Mise en place HTTPS + redirection HTTP -\> HTTPS](#3-mise-en-place-https--redirection-http---https)
+  - [4. Mise en place dossier de record pour les enregistrements vidéos RDP](#4-mise-en-place-dossier-de-record-pour-les-enregistrements-vidéos-rdp)
+  - [5. Changement de la page de login pour une meilleure vue](#5-changement-de-la-page-de-login-pour-une-meilleure-vue)
+  - [6. Export / Import des connexions](#6-export--import-des-connexions)
+  - [7. Problème rencontré](#7-problème-rencontré)
 
+## Contexte
 Contexte : Mettre en place un serveur Bastion pour sécuriser les accès RDP/SSH des intervenants externes, sans divulguer les identifiants administrateurs. Le Bastion sera isolé dans une DMZ avec journalisation et captures vidéos des sessions.
 
 ## 1. Préparation et installation
@@ -544,7 +552,7 @@ if [ -z "$LATEST_EXPORT" ]; then
 fi
 
 echo "📥 Import des connexions Guacamole..."
-echo "📁 Fichier détecté : $LATEST_BACKUP"
+echo "📁 Fichier détecté : $LATEST_EXPORT"
 
 #Import dans la base
 echo "⚙️  Import du fichier SQL dans la base..."
@@ -559,3 +567,65 @@ fi
 
 echo "✅ Base Guacamole mise à jour avec succès."
 ```
+
+## 7. Problème rencontré
+
+Lors de l'installation, j'ai pu remarquer que lors du lancement des conteneurs au démarrage du poste, la page web ne chargait pas par moment, et en fait je me suis rendu compte que c'était parce que lors du lancement des conteneurs, le conteneur de la base de données était pas complétement initialisé, sauf que vu que le conteneur contenant la page web en a besoin, il plantait et n'essayait pas de recontacter la BDD.
+
+### 1. Solution
+
+Pour palier à ce problème, ma solution va être de mettre en place un service qui se démarre une seule fois au démarrage du poste, qui va lancer un script faisant bien le redémarrage des conteneurs, ce qui permettra à la base de données de bien s'initialiser.
+
+### 2. Mise en place du script de redémarrage des conteneurs
+
+Script `/usr/local/bin/start_guacamole.sh` : 
+
+```bash
+#!/bin/bash
+cd /opt/guacamole || exit 1 #dossier où se trouve le conteneur et teste une fois de s'y rendre et sinon coupe le script
+/usr/bin/docker compose down #stop les conteneurs
+/usr/bin/docker compose up -d #redémarre les conteneurs
+```
+On met les droits d'éxecution au script : 
+
+```bash
+chmod +x /usr/local/bin/start_guacamole.sh
+```
+
+### 3. Création du service qui va lancer le script 
+
+Créer le service `/etc/systemd/system/guacamole.service` : 
+
+```ini
+[Unit]
+Description = Redémarrage Guacamole Docker
+# S'exécute après le lancement du réseau et de docker
+After = network-online.target docker.service
+Wants = network-online.target
+
+[Service]
+Type = oneshot #éxecute une fois le service
+ExecStart = /usr/local/bin/start_guacamole.sh # Chemin vers notre script
+RemainAfterExit = yes # Le service est considéré comme actif même après l'exécution du script
+User = root
+WorkingDirectory = /opt/guacamole # Spécifie le répertoire de travail où se trouve le docker-compose.yml
+
+[Install]
+WantedBy = multi-user.target
+```
+
+Recharger le systemd
+
+```bash
+systemctl daemon-reaload
+```
+
+Lancer le service + lancement au démarrage du serveur
+
+```bash
+systemctl start guacamole.service
+```
+```bash
+systemctl enable guacamole.service
+```
+
