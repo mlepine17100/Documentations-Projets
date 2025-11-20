@@ -30,23 +30,17 @@ Se référer à la documentation interne : *Étendre un disque LVM | Documentati
 
 ### 1.6 Renommer un volume group (VG)
 
-Se référer à la documentation interne : *Renommer un VG (Volume Group) | Documentation CGO*.
+Se référer à la documentation interne : [Renommer un VG (Volume Groupe) LVM](./Rename_VG.md)
 
-1.  Renommer le groupe de volume :
-    ```bash
-    vgrename ancien_nom nouveau_nom
-    ```
-2.  Mettre à jour les fichiers de configuration (`/etc/fstab`, `/boot/grub/grub.cfg`, `/etc/initramfs-tools/conf.d/*`) :
-    ```bash
-    sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/fstab
-    sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/initramfs-tools/conf.d/*
-    sed -i 's/{ancien_nom}/{nouveau_nom}/g' /boot/grub/grub.cfg
-    ```
 
 ### 1.7 Configuration des agents et du pare-feu
 * Déployer les agents machine (Veeam, Supervision, etc.).
 * Ajouter les règles nécessaires au pare-feu.
 * Vérifier la communication avec Internet et le Serveur DNS.
+
+### 1.8 Renommer un volume group (VG)
+
+Se référer à la documentation interne : [Désactiver / Réinitialiser le MFA d'un utilisateur](./Lock_TOTP.md)
 
 ---
 
@@ -247,7 +241,7 @@ Et tester la page `http://ip_locale:8080/guacamole`.
 
 ### 1. Modification du fichier `docker-compose.yml`
 
-Ajout sous les sections `services:` -> `guacamole:` et `guacd:`
+Ajout sous les sections `services:` -> `guacamole:` et `guacd:` :
 
 ```yaml
 services:
