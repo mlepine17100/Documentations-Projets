@@ -7,7 +7,7 @@
 ## 1. Préparation et installation
 
 ### 1.1 Installation ISO
-* **OS :** Debian 13.1 (Testing/Sid au moment de l'écriture, adapter selon la version stable actuelle).
+* **OS :** Debian 13.1 (Adapter selon la version stable actuelle(LTS)).
 * Vérifier l’intégrité de l’image ISO avant installation.
 * Lancer l’installation standard.
 
