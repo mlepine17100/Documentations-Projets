@@ -1,185 +1,157 @@
-# Documentation Apache Guacamole
+# Documentation d'Installation : Apache Guacamole (Bastion)
 
-## Tables des matières
-  - [1. Préparation et installation](#1-préparation-et-installation)
-  - [2. Installation et configuration d’Apache Guacamole](#2-installation-et-configuration-dapache-guacamole)
-  - [3. Mise en place HTTPS + redirection HTTP -\> HTTPS](#3-mise-en-place-https--redirection-http---https)
-  - [4. Mise en place dossier de record pour les enregistrements vidéos RDP](#4-mise-en-place-dossier-de-record-pour-les-enregistrements-vidéos-rdp)
-  - [5. Changement de la page de login pour une meilleure vue](#5-changement-de-la-page-de-login-pour-une-meilleure-vue)
-  - [6. Export / Import des connexions](#6-export--import-des-connexions)
-  - [7. Problème rencontré](#7-problème-rencontré)
+**Contexte :** Mettre en place un serveur Bastion pour sécuriser les accès RDP/SSH des intervenants externes, sans divulguer les identifiants administrateurs. Le Bastion sera isolé dans une DMZ avec journalisation et captures vidéos des sessions.
 
-## Contexte
-Contexte : Mettre en place un serveur Bastion pour sécuriser les accès RDP/SSH des intervenants externes, sans divulguer les identifiants administrateurs. Le Bastion sera isolé dans une DMZ avec journalisation et captures vidéos des sessions.
+---
 
 ## 1. Préparation et installation
 
 ### 1.1 Installation ISO
-- Vérifier l’intégrité de l’image ISO avant installation.  
-- Lancer l’installation standard. (ISO Debian13.1 choisi)
+* **OS :** Debian 13.1 (Testing/Sid au moment de l'écriture, adapter selon la version stable actuelle).
+* Vérifier l’intégrité de l’image ISO avant installation.
+* Lancer l’installation standard.
 
 ### 1.2 Paramétrages réseau
- 
-- IP : {IP}/{CIDR}
-- Gateway : {Adresse_IP_Gateway}
-- Serveur DNS :  {Windows_Server_rôle_DNS}
-- Nom FQDN : {nom_DNS_du_server}.{nom_de_domaine}
+* **IP :** `{IP}/{CIDR}`
+* **Gateway :** `{Adresse_IP_Gateway}`
+* **Serveur DNS :** `{Windows_Server_rôle_DNS}`
+* **Nom FQDN :** `{nom_DNS_du_server}.{nom_de_domaine}`
 
 ### 1.3 Configuration machine
-- Joindre le poste au domaine (Domaine AD).
-- Définir les utilisateurs :
-- `root`
-- `test`
-- etc.
+* Joindre le poste au domaine (Domaine AD).
+* Définir les utilisateurs (ex: `root`, `test`, etc.).
 
 ### 1.4 Gestion du disque
-- Mise en place du partitionnement avec **LVM**.  
-- `/home`, `/var`, `/tmp` sur des partitions séparées.
+* Mise en place du partitionnement avec **LVM**.
+* Points de montage recommandés : `/home`, `/var`, `/tmp` sur des partitions séparées.
 
 ### 1.5 Extension de partition
-Exemple d’extension :
-```bash
-lvextend -L +2G /dev/vg_name/lv_name
-resize2fs /dev/vg_name/lv_name
-```
+Se référer à la documentation interne : *Étendre un disque LVM | Documentation CGO*.
+
 ### 1.6 Renommer un volume group (VG)
 
-Renommer l’ancien nom en nouveau nom :
+Se référer à la documentation interne : *Renommer un VG (Volume Group) | Documentation CGO*.
 
-```bash
-vgrename ancien_nom nouveau_nom
-```
-
-Mettre à jour les fichiers de configuration :
-
-```bash
-/etc/fstab
-/boot/grub/grub.cfg
-/etc/initramfs-tools/conf.d/*
-sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/fstab
-sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/initramfs-tools/conf.d/*
-sed -i 's/{ancien_nom}/{nouveau_nom}/g' /boot/grub/grub.cfg
-```
+1.  Renommer le groupe de volume :
+    ```bash
+    vgrename ancien_nom nouveau_nom
+    ```
+2.  Mettre à jour les fichiers de configuration (`/etc/fstab`, `/boot/grub/grub.cfg`, `/etc/initramfs-tools/conf.d/*`) :
+    ```bash
+    sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/fstab
+    sed -i 's/{ancien_nom}/{nouveau_nom}/g' /etc/initramfs-tools/conf.d/*
+    sed -i 's/{ancien_nom}/{nouveau_nom}/g' /boot/grub/grub.cfg
+    ```
 
 ### 1.7 Configuration des agents et du pare-feu
-- Déployer les agents machine (Veeam, Supervision, etc.).
-- Ajouter les règles nécessaires au pare-feu.
-- Vérifier la communication avec **Internet / Serveur DNS**.
+* Déployer les agents machine (Veeam, Supervision, etc.).
+* Ajouter les règles nécessaires au pare-feu.
+* Vérifier la communication avec Internet et le Serveur DNS.
 
 ---
 
 ## 2. Installation et configuration d’Apache Guacamole
 
-
 ### 2.1 Prérequis
-- Serveur sous Linux (Debian13 en l'occurrence)
-- Accès administrateur (root ou via sudo)
-- Répertoire installation des conteneurs
+* Serveur sous Linux (Debian 13).
+* Accès administrateur (`root` ou `sudo`).
+* Répertoire d'installation pour les conteneurs préparé.
 
----
+### 2.2 Installation de Docker
+1.  Installation des dépendances :
+    ```bash
+    sudo apt-get install apt-transport-https ca-certificates curl gnupg2 software-properties-common
+    ```
+2.  Ajouter le dépôt officiel Docker :
+    ```bash
+    curl -fsSL [https://download.docker.com/linux/debian/gpg](https://download.docker.com/linux/debian/gpg) | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
-### 2.2 Installation du serveur Guacamole avec docker
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] [https://download.docker.com/linux/debian](https://download.docker.com/linux/debian) $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list
 
-#### Étapes principales :
-1. Installation des dépendances Docker :
-```bash
-sudo apt-get install apt-transport-https ca-certificates curl gnupg2 software-properties-common
-```
-2. Ajouter le dépôt officiel Docker
-```bash
-curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-```
-```bash
- echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list
-```
-```bash
-apt-get update
-```
+    apt-get update
+    ```
+3.  Installation des paquets Docker :
+    ```bash
+    apt-get install docker-ce docker-ce-cli containerd.io
+    ```
+4.  Activation au démarrage :
+    ```bash
+    systemctl enable docker
+    ```
 
-3. Installation des paquets Docker
-```bash
-apt-get install docker-ce docker-ce-cli containerd.io
-```
+### 2.3 Mise en place des conteneurs (Initialisation BDD)
 
->Démarrage automatique de Docker au lancement de machine
-```bash
-systemctl enable docker
-```
-
-### 2.3 Mise en place des conteneurs pour Apache Guacamole
-
-1. Créer le dossier pour installer le serveur 
-```bash
-mkdir -p /opt/guacamole
-```
-
-2. Pull les images docker pour les conteneurs essentiels
-```bash
-pull guacamole/guacamole:latest (v1.6.0)
-pull guacamole/guacd:latest (v1.6.0)
-pull mysql:latest (v9.4.0)
-```
-
-3. Récupérer le script d'initialisation de la BDD
-```bash 
-docker run --rm guacamole/guacamole:latest /opt/guacamole/bin/initdb.sh --mysql > initdb.sql
-```
-
-4. Créer le fichier `docker-compose.yml` initial pour la BDD :
-```bash
-services:
-  guacdb:
-    container_name: guacamoledb
-    image: mysql:latest
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: 'mdproot'
-      MYSQL_DATABASE: 'guacamole_db'
-      MYSQL_USERNAME: 'mysql'
-      MYSQL_PASSWORD: 'mdpmysql'
+1.  Créer le dossier d'installation :
+    ```bash
+    mkdir -p /opt/guacamole
+    cd /opt/guacamole
+    ```
+2.  Récupérer les images Docker (Versions : Guacamole v1.6.0, MySQL v9.4.0) :
+    ```bash
+    docker pull guacamole/guacamole:latest
+    docker pull guacamole/guacd:latest
+    docker pull mysql:latest
+    ```
+3.  Générer le script d'initialisation SQL :
+    ```bash
+    docker run --rm guacamole/guacamole:latest /opt/guacamole/bin/initdb.sh --mysql > initdb.sql
+    ```
+4.  Créer un `docker-compose.yml` temporaire pour la BDD :
+    ```yaml
+    services:
+      guacdb:
+        container_name: guacamoledb
+        image: mysql:9.4.0
+        restart: always
+        environment:
+          MYSQL_ROOT_PASSWORD: "mdproot"
+          MYSQL_DATABASE: "guacamole_db"
+          MYSQL_USER: "mysql"
+          MYSQL_PASSWORD: "mdpmysql"
+        volumes:
+          - './db-data:/var/lib/mysql'
     volumes:
-      - './db-data:/var/lib/mysql'
-volumes:
-  db-data:
-```
+      db-data:
+    ```
+5.  Lancer la BDD et l'initialiser :
+    ```bash
+    docker compose up -d
+    docker cp initdb.sql guacamoledb:/initdb.sql
+    docker exec -it guacamoledb bash -c "cat /initdb.sql | mysql -u root -p'mdproot' guacamole_db"
+    ```
+6.  Arrêter le conteneur :
+    ```bash
+    docker compose down
+    ```
 
-Puis lancer le conteneur
-```bash
-docker compose up -d
-```
+### 2.4 Configuration (Docker Compose)
 
-5. Initialiser la BDD
-```bash
-docker cp initdb.sql guacamoledb:/initdb.sql
-```
-Puis stopper le conteneur
-```bash
-docker compose down
-```
+Créer le fichier `docker-compose.yml` complet.
 
-6. Compléter le fichier `docker-compose.yml` avec tous les services nécessaires :
+> **Note :** `TOTP_ENABLED: "true"` active le MFA. Lors de la première connexion, un QR Code s'affichera pour configurer une app Authenticator. Cela permet d'alléger le filtrage IP sur le FortiWeb.
+
 ```yaml
 services:
   guacdb:
     container_name: guacamoledb
-    image: mysql:latest
+    image: mysql:9.4.0
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: 'mdproot'
-      MYSQL_DATABASE: 'guacamole_db'
-      MYSQL_USERNAME: 'mysql'
-      MYSQL_PASSWORD: 'mdpmysql'
+      MYSQL_ROOT_PASSWORD: "mdproot"
+      MYSQL_DATABASE: "guacamole_db"
+      MYSQL_USERNAME: "mysql"
+      MYSQL_PASSWORD: "mdpmysql"
     volumes:
       - './db-data:/var/lib/mysql'
 
   guacd:
     container_name: guacd
-    image: guacamole/guacd:latest
+    image: guacamole/guacd:1.6.0
     restart: always
 
   guacamole:
     container_name: guacamole
-    image: guacamole/guacamole:latest
+    image: guacamole/guacamole:1.6.0
     restart: always
     expose:
       - "8080"
@@ -189,7 +161,7 @@ services:
       MYSQL_DATABASE: "guacamole_db"
       MYSQL_USERNAME: "mysql"
       MYSQL_PASSWORD: "mdpmysql"
-      TOTP_ENABLED: "true"
+      # TOTP_ENABLED: "true" # Décommenter pour activer le MFA
     depends_on:
       - guacdb
       - guacd
@@ -198,6 +170,7 @@ volumes:
   db-data:
 ```
 
+
 Puis relancer le conteneur
 ```bash
 docker compose up -d
@@ -205,7 +178,6 @@ docker compose up -d
 
 Et tester la page `http://ip_locale:8080/guacamole`.
 
-Pour la partie MFA `TOTP_ENABLED:'true'`, s'effectue lors de la première connexion, après avoir cliqué sur 'Se Connecter' le serveur affichera une page avec le QrCode pour activer le MFA via Authenticator. Le Scanner puis rentrer le code -> le MFA est activé. Permet de retirer les filtrages IP sur le FortiWeb.
 ## 3. Mise en place HTTPS + redirection HTTP -> HTTPS
 (certificat déjà généré)
 
@@ -254,19 +226,19 @@ Pour la partie MFA `TOTP_ENABLED:'true'`, s'effectue lors de la première connex
 
     # Redirige le /guacamole
     SSLEngine On
-    SSLCertificateFile {lien vers certificat.pem}
-    SSLCertificateKeyFile {lien vers clé_privée.pem}
+    SSLCertificateFile {lien vers certificat.cer}
+    SSLCertificateKeyFile {lien vers clé_privée.key}
 
     # Proxy principal
-    ProxyPass / {lien-vers-page-web:port}/guacamole/ flushpackets=on
-    ProxyPassReverse / {lien-vers-page-web:port}/guacamole/
+    ProxyPass / {IP_Conteneur}:8080/guacamole/ flushpackets=on
+    ProxyPassReverse / {IP_Conteneur}:8080/guacamole/
 
     # Configuration spécifique pour Guacamole (websocket)
     <Location /websocket-tunnel>
         Order allow,deny
         Allow from all
-        ProxyPass ws://{lien-vers-page-web}/guacamole/websocket-tunnel
-        ProxyPassReverse ws://{lien-vers-page-web}/guacamole/websocket-tunnel
+        ProxyPass ws://{IP_Conteneur}:8080/guacamole/websocket-tunnel
+        ProxyPassReverse ws://{IP_Conteneur}:8080/guacamole/websocket-tunnel
     </Location>
 </VirtualHost>
 ```
@@ -281,26 +253,26 @@ Ajout sous les sections `services:` -> `guacamole:` et `guacd:`
 services:
   guacdb:
     container_name: guacamoledb
-    image: mysql:latest
+    image: mysql:9.4.0
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: 'mdproot'
-      MYSQL_DATABASE: 'guacamole_db'
-      MYSQL_USERNAME: 'mysql'
-      MYSQL_PASSWORD: 'mdpmysql'
+      MYSQL_ROOT_PASSWORD: "mdproot"
+      MYSQL_DATABASE: "guacamole_db"
+      MYSQL_USERNAME: "mysql"
+      MYSQL_PASSWORD: "mdpmysql"
     volumes:
       - './db-data:/var/lib/mysql'
 
   guacd:
     container_name: guacd
-    image: guacamole/guacd:latest
+    image: guacamole/guacd:1.6.0
     restart: always
     volumes:
       - /opt/guacamole/recordings:/var/lib/guacamole/recordings:rw
 
   guacamole:
     container_name: guacamole
-    image: guacamole/guacamole:latest
+    image: guacamole/guacamole:1.6.0
     restart: always
     expose:
       - "8080"
@@ -361,7 +333,7 @@ Après cela, les enregistrements vidéos devraient être créés et lisibles.
 
 ### 2. Trouver le dossier avec les éléments de base
 
-Pour ce serveur, étant donné qu'il est mis en place avec Docker, les éléments pour modifier les pages de Guacamole se retrouvent dans un conteneur, ce qui fait que si on modifie dans le conteneur directement, les cahngements ne seront pas persistants.
+Pour ce serveur, étant donné qu'il est mis en place avec Docker, les éléments pour modifier les pages de Guacamole se retrouvent dans un conteneur, ce qui fait que si on modifie dans le conteneur directement, les changements ne seront pas persistants.
 
 Pour palier à ça, nous devons récupérer l'archive `guacamole.war` sur l'hôte, qui est située dans le dossier `guacamole:/opt/guacamole/webapp/`
 
@@ -409,7 +381,7 @@ Pour modifier le titre dans notre exemple, on modifiera cette partie
 en
 
 ```html
-<div class="app-name"> Bienvenue sur l'accès prestataire </div>
+<div class="app-name"> Bienvenue sur l\'accès prestataire </div>
 ``` 
 
 Et pour le numéro de version, on modifiera 
@@ -434,18 +406,26 @@ Pour pouvoir modifier le logo ainsi que le fond de page, on doit modifier le fic
 nano ./1.guacamole.{hash}.css
 ```
 
-Une fois sur l'éditeur de texte, chercher '`guac_tricolor.svg`' qui est le nom du logo de base sur Guacamole, donc soit renommer son propre logo à ce nom la, soit remplacer l'ancienne valeur par le nouveau nom de son logo, ensuite tester si le logo se met bien sur la page, sinon adapter le CSS de cette même variable.
+Une fois sur l'éditeur de texte, chercher `guac_tricolor.svg` qui est le nom du logo de base sur Guacamole, donc soit renommer son propre logo à ce nom la, soit remplacer l'ancienne valeur par le nouveau nom de son logo, et pour adapter le logo, il faut supprimer toute la variable `.login-ui .login-dialog .logo` et ensuite ajouter à la place celle ci :
+
+```css
+.login-ui .login-dialog .logo {display: block;margin: .5em auto;width: 200px;height: 100px;background-size: 200px;-moz-background-size: px 100px;-webkit-background-size: px 100px;-khtml-background-size: px 100px;background-image: url(images/guac-tricolor.svg)}
+```
 
 #### 2. Modifier le fond de page
 
-Pour modifier le fond de page c'est légèrement plus compliqué, toujours dans le fichier `.css`, il faut cette fois rajouter une nouvelle variable pour pouvoir y introduire le fond étant donné qu'à la base il n'y en a pas.
+Pour modifier le fond de page, toujours dans le fichier .css, il faut modifier la variable div.login-ui y supprimer une ligne, et en rajouter deux.
 
-Cette variable peut être ajoutée un peu où on veut dans le fichier, je l'ai mis en 3ème variable de mon côté.
+Ligne à supprimer : 
 
-```css
-.login-ui{
-      background:#000 url("images/{fond de page}") no-repeat center center fixed !important;background-size:cover !important
-      }
+```bash
+background: #fff;
+```
+
+Lignes à ajouter : 
+
+```bash
+background-image: url('images/{fond de page}.jpg'); background-size: cover;
 ```
 
 Les paramètres peuvent être adaptés comme on le souhaite.
@@ -454,7 +434,7 @@ Les paramètres peuvent être adaptés comme on le souhaite.
 
 #### 1. Compression du dossier modifié
 
-Après les modifications effectuées, il faudra refaire le dossier compressé  `guacamole`.war pour ensuite le remettre dans le conteneur, on le remettra dans le dossier `/opt/guacamole` en remplacement de l'ancien.
+Après les modifications effectuées, il faudra refaire le dossier compressé  `guacamole.war` pour ensuite le remettre dans le conteneur, on le remettra dans le dossier `/opt/guacamole` en remplacement de l'ancien.
 
 ```bash
 zip -r ../guacamole.war * #compressé tous les éléments du dossier modifié dans le nouveau dossier guacamole.war
@@ -498,7 +478,7 @@ Lors d'une montée de version ou alors une refonte totale du système Bastion, l
 
 ### 1. Script d'export base de données
 
-script `export_bdd.sql` : 
+script `export_bdd.sh` : 
 
 ```bash
 #!/bin/bash
@@ -537,7 +517,7 @@ Ce script va créer un fichier `.sql` avec les informations dans le dossier `exp
 
 ### 2. Script d'import base de données
 
-script `import_bdd.sql` :
+script `import_bdd.sh` :
 
 ```bash
 #!/bin/bash
@@ -572,40 +552,55 @@ fi
 echo "✅ Base Guacamole mise à jour avec succès."
 ```
 
-## 7. Mise en place de la purge mensuelle du dossier recording pour éviter la saturation
+## 7. Mise en place de la purge mensuelle du dossier recordings pour éviter la saturation
 
-### 1. Mise en place du script de purge du dossier /opt/guacamole/recordings/
+Cette étape permet de supprimer automatiquement les enregistrements vidéos vieux de plus de 30 jours afin de ne pas saturer l'espace disque du serveur.
 
-script `/usr/local/sbin/purge_guac_record.sh` : 
+### 7.1 Création du script de purge
 
-```bash
-#!/bin/bash
-# Script de purge des anciens enregistrements Guacamole
+1.  Créer le fichier script dans `/usr/local/sbin/` :
+    ```bash
+    nano /usr/local/sbin/purge_guac_record.sh
+    ```
 
-# Dossier à nettoyer
-DIR="/opt/guacamole/recordings"
+2.  Copier le contenu suivant :
+    ```bash
+    #!/bin/bash
+    # Script de purge des anciens enregistrements Guacamole
 
-# Supprime les fichiers de plus de 30 jours
-find "$DIR" -type f -mtime +30 -exec rm -f {} \;
+    # Dossier à nettoyer
+    DIR="/opt/guacamole/recordings"
 
-# Supprime les dossiers vides restants
-find "$DIR" -type d -empty -delete
+    # Supprime les fichiers de plus de 30 jours
+    find "$DIR" -type f -mtime +30 -exec rm -f {} \;
 
-exit 0
-```
-### 2. modifier le crontab pour lancer le script tous les mois
+    # Supprime les dossiers vides restants
+    find "$DIR" -type d -empty -delete
 
-Se rendre sur le contrab avec la commande `crontab -e`, et ajouter la ligne suivant : 
+    exit 0
+    ```
 
-```bash
-@monthly /usr/local/sbin/purge-guac-recordings.sh >/var/log/purge-guac.log 2>&1
-```
+3.  Rendre le script exécutable :
+    ```bash
+    chmod +x /usr/local/sbin/purge_guac_record.sh
+    ```
 
-Cette ligne lancera le script tous les mois et mettra le résultat de la commande dans un fichier log.
+### 7.2 Automatisation avec Crontab
+
+1.  Ouvrir l'éditeur crontab :
+    ```bash
+    crontab -e
+    ```
+
+2.  Ajouter la ligne suivante à la fin du fichier pour lancer le script une fois par mois :
+    ```cron
+    @monthly /usr/local/sbin/purge_guac_record.sh >/var/log/purge-guac.log 2>&1
+    ```
+    > **Note :** Cette configuration redirige les logs d'exécution (succès et erreurs) vers `/var/log/purge-guac.log`.
 
 ## 8. Ordonnancement au redémarrage
 
-Lors de l'installation, j'ai pu remarquer que lors du lancement des conteneurs au démarrage du poste, la page web ne chargait pas par moment, et en fait je me suis rendu compte que c'était parce que lors du lancement des conteneurs, le conteneur de la base de données était pas complétement initialisé, sauf que vu que le conteneur contenant la page web en a besoin, il plantait et n'essayait pas de recontacter la BDD.
+Lors de l'installation, j'ai pu remarquer que lors du lancement des conteneurs au démarrage du poste, la page web ne chargeait pas par moment, et en fait je me suis rendu compte que c'était parce que lors du lancement des conteneurs, le conteneur de la base de données n'était pas complétement initialisé, sauf que vu que le conteneur contenant la page web en a besoin, il plantait et n'essayait pas de recontacter la BDD.
 
 ### 1. Solution
 
@@ -621,7 +616,7 @@ cd /opt/guacamole || exit 1 #dossier où se trouve le conteneur et teste une foi
 /usr/bin/docker compose down #stop les conteneurs
 /usr/bin/docker compose up -d #redémarre les conteneurs
 ```
-On met les droits d'éxecution au script : 
+On met les droits d'exécution au script : 
 
 ```bash
 chmod +x /usr/local/bin/start_guacamole.sh
@@ -652,7 +647,7 @@ WantedBy = multi-user.target
 Recharger le systemd
 
 ```bash
-systemctl daemon-reaload
+systemctl daemon-reload
 ```
 
 Lancer le service + lancement au démarrage du serveur
