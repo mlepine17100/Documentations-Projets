@@ -26,7 +26,7 @@
 * Points de montage recommandés : `/home`, `/var`, `/tmp` sur des partitions séparées.
 
 ### 1.5 Extension de partition
-Se référer à la documentation interne : *Étendre un disque LVM | Documentation CGO*.
+Se référer à la documentation interne : [Étendre un disque LVM](./Extend_Part.md).
 
 ### 1.6 Renommer un volume group (VG)
 
