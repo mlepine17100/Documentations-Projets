@@ -619,27 +619,16 @@ L'objectif est que les logs et les mécanismes de sécurité de Guacamole voient
 
 ## 2. Gestion des tentatives d'authentification échouées (Anti Brute-Force)
 
-Ces règles ne sont pas configurables via de simples variables d'environnement Docker. Elles nécessitent de créer et de monter un fichier de configuration nommé **`guacamole.properties`** dans le conteneur (`/opt/guacamole/`).
+Ces règles sont configurables via de simples variables d'environnement Docker.
 
-### Contenu du fichier `guacamole.properties`
 
-```properties
-# Limite d'échecs : Nombre maximum de tentatives de connexion invalides avant le bannissement.
-auth-ban-max-invalid-attempts: 10
-
-# Durée du bannissement : Temps pendant lequel l'IP sera bloquée après avoir atteint la limite (en secondes).
-auth-ban-duration: 600
-
-# Réinitialisation du compteur : Période (en secondes) après laquelle le compteur d'échecs se remet à zéro pour une IP donnée.
-auth-ban-address-count-reset-after: 300
-```
 #### Ajout au `docker-compose.yml` : 
 
-Pour que cette configuration soit prise en compte, il faut monter le fichier :
+Pour que cette configuration soit prise en compte, il faut ajouter dans la partie `guacamole:` :
 
 ```bash
-volumes:
-    - ./guacamole.properties:/etc/guacamole/guacamole.properties
+BAN_MAX_INVALID_ATTEMPTS: "10"       # Augmente la limite de 5 à 10
+BAN_ADDRESS_DURATION: "900"          # Définit le ban à 15 minutes (900s)
 ```
 
 
