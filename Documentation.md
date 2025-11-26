@@ -592,7 +592,60 @@ Cette étape permet de supprimer automatiquement les enregistrements vidéos vie
     ```
     > **Note :** Cette configuration redirige les logs d'exécution (succès et erreurs) vers `/var/log/purge-guac.log`.
 
-## 8. Ordonnancement au redémarrage
+
+## 8. Configuration Guacamole derrière un Reverse Proxy (Docker)
+
+Ce document explique les variables d'environnement essentielles pour garantir la sécurité et le bon fonctionnement d'Apache Guacamole lorsque celui-ci est placé derrière un reverse proxy (comme Apache, ou la passerelle Docker).
+
+
+## 1. Correction de l'identification de l'IP Source
+
+Lorsque Guacamole est dans un conteneur derrière un proxy, il identifie tous les utilisateurs par l'adresse IP du proxy (`172.18.0.1`) et non par leur véritable adresse IP.
+
+L'ajout des variables suivantes active la fonctionnalité **`RemoteIpValve`** de Tomcat, forçant le serveur à lire l'en-tête **`X-Forwarded-For`** pour déterminer la véritable IP du client. Les lignes à ajouter, se mettent dans la partie `guacamole:` du `docker-compose.yml`.
+
+### Configuration dans `docker-compose.yml`
+
+| Variable | Valeur d'exemple | Description |
+| :--- | :--- | :--- |
+| **`REMOTE_IP_VALVE_ENABLED`** | `"true"` ou `"false"` | Active la `RemoteIpValve` de Tomcat. **Indispensable** pour lire l'IP réelle fournie par le proxy. |
+| **`REMOTE_IP_VALVE_INTERNAL_PROXIES`** | `"172\\.18\\.0\\.1"` | Indique à Guacamole que l'IP spécifiée est un proxy de confiance. Cette IP sera ignorée lors du bannissement, permettant de cibler l'IP du client final (e.g., `10.10.10.X`). |
+
+### Objectif
+
+L'objectif est que les logs et les mécanismes de sécurité de Guacamole voient : **`{IP_Client}`** (l'utilisateur) et non **`172.18.0.1`** (le conteneur/passerelle).
+
+---
+
+## 2. Gestion des tentatives d'authentification échouées (Anti Brute-Force)
+
+Ces règles ne sont pas configurables via de simples variables d'environnement Docker. Elles nécessitent de créer et de monter un fichier de configuration nommé **`guacamole.properties`** dans le conteneur (`/opt/guacamole/`).
+
+### Contenu du fichier `guacamole.properties`
+
+```properties
+# Limite d'échecs : Nombre maximum de tentatives de connexion invalides avant le bannissement.
+auth-ban-max-invalid-attempts: 10
+
+# Durée du bannissement : Temps pendant lequel l'IP sera bloquée après avoir atteint la limite (en secondes).
+auth-ban-duration: 600
+
+# Réinitialisation du compteur : Période (en secondes) après laquelle le compteur d'échecs se remet à zéro pour une IP donnée.
+auth-ban-address-count-reset-after: 300
+```
+#### Ajout au `docker-compose.yml` : 
+
+Pour que cette configuration soit prise en compte, il faut monter le fichier :
+
+```bash
+volumes:
+    - ./guacamole.properties:/etc/guacamole/guacamole.properties
+```
+
+
+
+
+## 9. Ordonnancement au redémarrage
 
 Lors de l'installation, j'ai pu remarquer que lors du lancement des conteneurs au démarrage du poste, la page web ne chargeait pas par moment, et en fait je me suis rendu compte que c'était parce que lors du lancement des conteneurs, le conteneur de la base de données n'était pas complétement initialisé, sauf que vu que le conteneur contenant la page web en a besoin, il plantait et n'essayait pas de recontacter la BDD.
 
