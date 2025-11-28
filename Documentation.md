@@ -598,7 +598,7 @@ Cette étape permet de supprimer automatiquement les enregistrements vidéos vie
 Ce document explique les variables d'environnement essentielles pour garantir la sécurité et le bon fonctionnement d'Apache Guacamole lorsque celui-ci est placé derrière un reverse proxy (comme Apache, ou la passerelle Docker).
 
 
-## 1. Correction de l'identification de l'IP Source
+### 8.1 Correction de l'identification de l'IP Source
 
 Lorsque Guacamole est dans un conteneur derrière un proxy, il identifie tous les utilisateurs par l'adresse IP du proxy (`172.18.0.1`) et non par leur véritable adresse IP.
 
@@ -617,7 +617,7 @@ L'objectif est que les logs et les mécanismes de sécurité de Guacamole voient
 
 ---
 
-## 2. Gestion des tentatives d'authentification échouées (Anti Brute-Force)
+### 8.2 Gestion des tentatives d'authentification échouées (Anti Brute-Force)
 
 Ces règles sont configurables via de simples variables d'environnement Docker.
 
@@ -631,10 +631,41 @@ BAN_MAX_INVALID_ATTEMPTS: "10"       # Augmente la limite de 5 à 10
 BAN_ADDRESS_DURATION: "900"          # Définit le ban à 15 minutes (900s)
 ```
 
+## 9. Mise en place d'un lecteur réseau sur la machine RDP
 
+Cette partie explique comment mettre en place un lecteur réseau entre le serveur où nous sommes connectés et le guacamole, ce qui pourra nous permettre d'envoyer et/ou télécharger des fichiers entre notre hôte et le serveur en RDP.
 
+### 9.1 Création du dossier de partage et ses sous-dossiers.
 
-## 9. Ordonnancement au redémarrage
+Sous **`/opt/guacamole`** on va créer un dossier **`share`**, qui sera donc notre dossier principal pour les lecteurs, ensuite on se rend dans ce dossier, et on y créera les sous-dossiers nommés pour chaque service, par exemple un sous-dossier `Compta`.
+
+```bash
+mkdir -p /opt/guacamole/share/Compta 
+```
+
+Ensuite il faut penser à attribuer les bons droits, que soit l'owner du dossier share, mais aussi les droits en R+W+X
+
+```bash
+chown -R 1000:1000 /opt/guacamole/share #1000 est l'UID de l'utilisateur guacd
+chmod -R 2700 /opt/guacamole/share #2 attribue les droits sur tous les sous-dossiers
+```
+
+### 9.2 Mappage du dossier sur l'hôte serveur et le dossier dans le conteneur.
+Pour cette partie, il faudra modifier le `docker-compose.yml` et y ajouter une ligne au service `guacd:` et sous `volumes:` bien sûr en lecture/écriture.
+
+### Nouveau fichier `docker-compose.yml` : 
+
+```YML
+guacd:
+  container_name: guacd
+  image: guacamole/guacd:1.6.0
+  restart: always
+  volumes:
+    - /opt/guacamole/recordings:/var/lib/guacamole/recordings:rw
+    - /opt/guacamole/share:/opt/guacamole/share:rw # Ligne à ajouter
+```
+
+## 10. Ordonnancement au redémarrage
 
 Lors de l'installation, j'ai pu remarquer que lors du lancement des conteneurs au démarrage du poste, la page web ne chargeait pas par moment, et en fait je me suis rendu compte que c'était parce que lors du lancement des conteneurs, le conteneur de la base de données n'était pas complétement initialisé, sauf que vu que le conteneur contenant la page web en a besoin, il plantait et n'essayait pas de recontacter la BDD.
 
