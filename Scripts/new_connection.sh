@@ -1,13 +1,20 @@
+####################################################################################
+# Description du script : Job bash qui créer une nouvelle connexion à un serveur.
+#
+#_Ver_|_Modifie_le_|_Par_|_Objet___________________________________________
+#     |            |     |
+#     |            |     | 
+# 1.0 | 10/12/2025 | MLE | Création du script
+#     |            |     | 
+####################################################################################
+
 #!/bin/bash
+# Bien penser à mettre l'utilisateur qui exécute le script dans le groupe "docker" : << usermod -aG docker {USER} >>
 
 CONTAINER_DB="guacamoledb"
-
-#U=@USER
-#M=@PASSWD
-#B=@DB
-read -s -p "Utilisateur BDD : " U
-read -s -p "Mot de passe BDD : " M
-read -s -p "BDD Utilisée : " B
+U="root"
+M="@option.bdd_pass_root@" 
+B="guacamole_db"
 UMB="-u $U -p$M $B"
 TEMP_SQL_FILE="/tmp/guac_conn_$(date +%s).sql"
 
@@ -58,9 +65,9 @@ echo "--- Création d'une nouvelle connexion Guacamole ---"
 
 #CONN_NAME=@CONN_NAME
 #PROTOCOL=@PROTOCOL
-
 read -p "Nom affiché de la connexion : " CONN_NAME
 read -p "Protocole (SSH ou RDP) : " PROTOCOL
+
 PROTOCOL=$(echo "$PROTOCOL" | tr '[:upper:]' '[:lower:]')
 # Définition du Parent ID
 if [[ "$PROTOCOL" == "SSH" || "$PROTOCOL" == "ssh" ]] ; then
@@ -74,6 +81,7 @@ else
     exit 1
 fi
 
+
 #HOSTNAME=@HOSTNAME
 #PORT=@PORT
 #USERNAME=@USERNAME
@@ -82,6 +90,8 @@ read -p "Adresse IP/Hostname du serveur (IPv4) : " HOSTNAME
 read -p "Port du serveur : " PORT
 read -p "Identifiant de l'utilisateur : " USERNAME
 read -s -p "Mot de passe de l'utilisateur : " PASSWORD
+
+
 echo ""
 
 # --- Génération du Fichier SQL ---
