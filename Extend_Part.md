@@ -160,7 +160,11 @@ data 2 1 0 wz--n- 1,50t 131,20g
 Étendez le volume logique (ici `lv_data`) pour utiliser tout l'espace libre ajouté :
 
 ```bash
-lvextend -l +100%FREE /dev/mapper/data-lv_data
+lvextend -l +100%FREE /dev/mapper/{partition-à-agumenter}
+```
+ou
+```bash
+lvextend -L +?G /dev/mapper/{partition-à-agumenter}
 ```
 
 **Exemple de résultat :**
@@ -176,7 +180,13 @@ Logical volume lv_data successfully resized.
 Appliquez l'agrandissement sur le système de fichiers (ici XFS) :
 
 ```bash
-xfs_growfs /dev/mapper/data-lv_data
+xfs_growfs /dev/mapper/{partition-à-agumenter}
+```
+
+Pour le système de fichiers ext4
+
+```bash
+resize2fs /dev/mapper/{partition-à-agumenter}
 ```
 
 **Exemple de résultat :**
@@ -199,5 +209,5 @@ df -h
 ```text
 Sys. de fichiers Taille Utilisé Dispo Uti% Monté sur
 ...
-/dev/mapper/data-lv_data 1,5T 1,2T 349G 78% /data
+/dev/mapper/{partition-à-agumenter} 1,5T 1,2T 349G 78% /data
 ```

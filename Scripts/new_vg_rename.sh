@@ -11,6 +11,8 @@ if [[ $EUID -ne 0 ]]; then
    echo "Erreur: Ce script doit être exécuté en tant que root (ou via sudo)."
    exit 1
 fi
+# Désactiver TOUS les swaps immédiatement pour que le système ne les utilise plus
+swapoff -a
 
 echo  "--- Renommage de la machine ---"
 read -p "Entrez le nouveau nom de la machine : " HOST
@@ -98,14 +100,21 @@ chroot $MOUNT_POINT update-initramfs -u -k all
 chroot $MOUNT_POINT update-grub
 
 echo "--- ÉTAPE 6 : Nettoyage et Fin ---"
-echo "Démontage des partitions..."
-umount -l "$MOUNT_POINT/dev" "$MOUNT_POINT/proc" "$MOUNT_POINT/sys" "$MOUNT_POINT/run"
-umount "$MOUNT_POINT/boot" || true
-umount $MOUNT_POINT
+cd /
+
+# On s'assure que rien ne tourne encore
+sync
+
+# On démonte dans l'ordre inverse du montage
+# L'option -f force, -l (lazy) détache immédiatement
+for dir in /dev/pts /dev/shm /dev /proc /sys /run; do
+    umount -fl "$MOUNT_POINT$dir" 2>/dev/null || true
+done
+
+umount -fl "$MOUNT_POINT/boot" 2>/dev/null || true
+umount -fl "$MOUNT_POINT" 2>/dev/null || true
+
+# Suppression du répertoire de travail s'il est vide
+rmdir $MOUNT_POINT 2>/dev/null || true
 
 systemctl daemon-reload
-echo "================================================================="
-echo " OPÉRATION TERMINÉE AVEC SUCCÈS "
-echo " Nouveau VG : $NOUVEAU_VG "
-echo " Vous pouvez maintenant redémarrer sur votre système."
-echo "================================================================="
